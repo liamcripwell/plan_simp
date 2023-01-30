@@ -118,12 +118,12 @@ class RobertaClfFinetuner(pl.LightningModule):
     def __init__(self, model_name_or_path='roberta-base', tokenizer=None, add_context=False, params=None):
         super().__init__()
 
-        num_labels = 5 if self.has_param("multi_split") else 4
-        params["num_labels"] = num_labels
-        self.op_tokens = OP_TOKENS if not self.has_param("multi_split") else M_OP_TOKENS
-
         # saves params to the checkpoint and in self.hparams
         self.save_hyperparameters(params)
+
+        num_labels = 5 if self.has_param("multi_split") else 4
+        self.hparams["num_labels"] = num_labels
+        self.op_tokens = OP_TOKENS if not self.has_param("multi_split") else M_OP_TOKENS
 
         if not add_context:
             self.model = RobertaForSequenceClassification.from_pretrained(model_name_or_path, num_labels=num_labels)
