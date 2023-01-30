@@ -66,9 +66,11 @@ def run_generator(model_ckpt, test_set, x_col="complex", op_col=None, reading_lv
         else:
             input_seqs = test_set if isinstance(test_set, list) else test_set[x_col].tolist()
 
+        inputs = list(zip(input_seqs))
+
         # preprocess data
         dm = BartDataModule(tokenizer, params=hparams)
-        test_data = DataLoader(input_seqs, batch_size=batch_size, num_workers=num_workers, collate_fn=dm.prepro_collate)
+        test_data = DataLoader(inputs, batch_size=batch_size, num_workers=num_workers, collate_fn=dm.prepro_collate)
 
         # predict output sequences
         pred_ys = []
