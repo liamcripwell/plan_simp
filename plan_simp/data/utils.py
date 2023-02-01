@@ -29,14 +29,15 @@ def convert_labels(labels, label_dict: Dict):
     else:
         return labels
 
-def prepend_tokens(df, x_col, class_labels, op_tokens, op_col=None, lvl_col=None):
+def prepend_tokens(df, x_col, class_labels=None, op_tokens=None, op_col=None, lvl_col=None):
     """Append specified control tokens to text and return results as List."""
     seqs = [row[x_col] for _, row in df.iterrows()]
 
     # reading level
     if lvl_col is not None:
         for i, row in df.iterrows():
-            tok = row[lvl_col]
+            # can either use column value or manually specified level constant
+            tok = row[lvl_col] if not isinstance(lvl_col, int) else lvl_col
             seqs[i] = f"{READING_LVLS[tok]} {seqs[i]}"
 
     # operation control-tokens

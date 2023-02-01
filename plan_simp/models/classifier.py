@@ -9,7 +9,7 @@ from torch.utils.data import DataLoader
 from transformers import AdamW, RobertaTokenizer, RobertaForSequenceClassification, AutoModel, AutoConfig
 
 from plan_simp.data.roberta import RobertaDataModule
-from plan_simp.data.utils import OP_TOKENS, M_OP_TOKENS, READING_LVLS
+from plan_simp.data.utils import OP_TOKENS, M_OP_TOKENS, READING_LVLS, prepend_tokens
 from plan_simp.models.custom_roberta import RobertaForContextualSequenceClassification, ContextRobertaConfig
 
 INF_PARAMS = ["add_context", "context_window", "doc_pos_embeds", "num_labels"]
@@ -74,8 +74,7 @@ def run_classifier(model_ckpt, test_set, x_col="complex", max_samples=None, toke
         input_seqs = test_set if isinstance(test_set, list) else test_set[x_col].tolist()
         if reading_lvl is not None:
             # prepend reading lvl control tokens
-            tokens = [t for t in [src_lvl, reading_lvl] if t is not None]
-            input_seqs = [f"{' '.join([READING_LVLS[row[t]] for t in tokens])} {row[x_col]}" for _, row in test_set.iterrows()]
+            input_seqs = prepend_tokens(test_set, x_col, reading_lvl=reading_lvl)
         if add_context or dm.has_param("add_context"):
             context_ids = dm.prepare_context_ids(test_set, context_doc_id)
             input_seqs = [input_seqs, context_ids]
