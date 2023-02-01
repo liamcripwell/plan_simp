@@ -1,6 +1,8 @@
 : '
 This script will illustrate an example of how the pretrained PG_Dyn system can be used to perform out-of-domain inference.
-In this example we use the validation set of Wiki-auto.
+
+In this example we use the validation set of Wiki-auto, with models trained on Newsela-auto. 
+Because Wikipedia does not have different reading levels we manually specify a constant target level of 3 (the second simplest).
 '
 
 # encode sentence-level context embeddings to be used by the planner
@@ -11,10 +13,10 @@ python plan_simp/scripts/encode_contexts.py \
 # run inference with pretrained models
 python plan_simp/scripts/generate.py dynamic \
 	--clf_model_ckpt=liamcripwell/pgdyn-plan \
-  	--model_ckpt=liamcripwell/pgdyn-simp  \
-  	--test_file=examples/wikiauto_sents_valid.csv \
+  --model_ckpt=liamcripwell/pgdyn-simp  \
+  --test_file=examples/wikiauto_sents_valid.csv \
 	--doc_id_col=pair_id \
-  	--context_doc_id=pair_id \
-  	--context_dir=fake_context_dir \
+  --context_doc_id=pair_id \
+  --context_dir=fake_context_dir \
 	--reading_lvl=3 \
-  	--out_file=test_out.csv
+  --out_file=test_out.csv
