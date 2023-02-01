@@ -27,9 +27,21 @@ planner, p_tokenizer, p_hparams = load_planner("liamcripwell/pgdyn-plan")
 simplifier, tokenizer, hparams = load_simplifier("liamcripwell/pgdyn-simp")
 ```
 
-To perform end-to-end inference with the full pipeline, see the following section.
+An example use-case of inference on out-of-domain test data is illustrated in [this script](examples/wikiauto_inference.sh).
 
-## Plan-Guided Simplification
+## Preparing context representations
+We provide a script to generate sentence-level context encodings.
+
+```bash
+# encode sentence-level context embeddings to be used by the planner
+python plan_simp/scripts/encode_contexts.py \
+	--data=examples/wikiauto_docs_valid.csv \
+	--x_col=complex \
+	--id_col=pair_id \
+	--save_dir=fake_context_dir/
+```
+
+## Plan-guided simplification
 A planner can be used to dynamically generate simplified documents. The planner will iteratively predict an operation for the current sentence (given the document context) and pass this to an encoder-decoder to conditionally generate a simplification. These simplifications are then used within the context of subsequent sentences. There is no need to pass a `--simple_context_dir` argument because dynamic context will be managed on-the-fly.
 
 ```bash
