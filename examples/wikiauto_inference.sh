@@ -20,3 +20,14 @@ python plan_simp/scripts/generate.py dynamic \
   --context_dir=fake_context_dir \
 	--reading_lvl=3 \
   --out_file=test_out.csv
+
+# evaluate simplification performance
+python plan_simp/scripts/eval_simp \
+  --input_data=examples/wikiauto_docs_valid.csv \
+  --output_data=test_out.csv \
+  --x_col=complex \
+  --r_col=simple \
+  --y_col=pred \
+  --doc_id_col=pair_id \
+  --prepro=True \
+  --sent_level=True

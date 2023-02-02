@@ -211,7 +211,7 @@ def evaluate(input_data, output_data=None, ref_data=None, prepro=False, x_col=No
         out_docs.append(out_doc)
         ref_docss.append(ref_docs)
 
-    if "bart" in metrics:
+    if "bart" in metrics and bartscore_path is not None:
         print("Calculating BARTScores...")
         bart_scorer = BARTScorer(device='cuda:0', checkpoint='facebook/bart-large-cnn')
         bart_scorer.load(path=bartscore_path)
