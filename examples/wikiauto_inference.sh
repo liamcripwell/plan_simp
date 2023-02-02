@@ -22,7 +22,7 @@ python plan_simp/scripts/generate.py dynamic \
   --out_file=test_out.csv
 
 # evaluate simplification performance
-python plan_simp/scripts/eval_simp \
+python plan_simp/scripts/eval_simp.py \
   --input_data=examples/wikiauto_docs_valid.csv \
   --output_data=test_out.csv \
   --x_col=complex \
