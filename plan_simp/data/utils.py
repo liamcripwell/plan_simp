@@ -115,7 +115,7 @@ def load_sent_context_tensors(context_ids, context_dir, sep="#$#", context_windo
             s_sent_id = int(s_sent_id)
             if not os.path.exists(f"{simple_context_dir}/{s_doc_id}_z.pt"):
                 # warn if there is currently no cached version of the dynamic context
-                print(f"No dynamic context available for {simple_context_dir}/{s_doc_id}.")
+                print(f"No dynamic context available for {simple_context_dir}/{s_doc_id}. (This is expected early on)")
             else:
                 # load simple document's sentence vectors
                 z_s = torch.load(f"{simple_context_dir}/{s_doc_id}_z.pt")

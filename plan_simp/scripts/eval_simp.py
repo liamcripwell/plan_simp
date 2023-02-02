@@ -201,6 +201,10 @@ def evaluate(input_data, output_data=None, ref_data=None, prepro=False, x_col=No
             matcher = matching_functions.chrf_matcher
             smart_scorer = scorer.SmartScorer(matching_fn=matcher)
 
+            # if entire document deleted manually include 1 empty sentence
+            if out_doc_sents == []:
+                out_doc_sents = [""]
+
             # need documents split into sentences (NOTE: assumes single reference)
             smarts = smart_scorer.smart_score(ref_docs_sents[0], out_doc_sents)["smartL"]
             results["smart"][i] = np.array([smarts["precision"], smarts["recall"], smarts["fmeasure"]])
@@ -225,6 +229,9 @@ def evaluate(input_data, output_data=None, ref_data=None, prepro=False, x_col=No
         input_data["bart_p"] = results["bart_p"]
         input_data["bart_r"] = results["bart_r"]
         input_data["bart_f1"] = results["bart_f1"]
+    elif "bart" in metrics:
+        # need to remove bart from metrics list if we don't have a path for the model
+        metrics.remove("bart")
 
     if "bert" in metrics:
         print("Calculating BERTScores...")

@@ -104,7 +104,8 @@ class Launcher(object):
         remaining_docs = test_set[doc_id_col].unique()
         text_id = "sent_id"
         max_text_id = test_set[text_id].max()
-        for i in tqdm(range(max_text_id+1)):
+        pbar = tqdm(total=len(test_set))
+        for i in range(max_text_id+1):
             # compile ith sents of each document (if not already simplified)
             i_texts = test_set[test_set[text_id] == i].copy()
             done = [j for j, _ in i_texts.iterrows() if preds[j] != "#"]
@@ -136,6 +137,8 @@ class Launcher(object):
                 if z_radius is not None:
                     # update cached context embeds
                     update_context_embeddings(i_sents, temp_dir, doc_id_col, z_radius, sent_encoder)
+
+            pbar.update(len(i_texts))
 
             # remove cached context embeds when no longer required
             # current_docs = i_sents[doc_id_col].unique()
