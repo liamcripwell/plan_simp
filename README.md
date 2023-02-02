@@ -131,3 +131,19 @@ python plan_simp/scripts/eval_clf.py <planner_model> <test_set>
 # sequence tagging; for Newsela add --x_col=c_id --reading_lvl=s_level
 python plan_simp/scripts/eval_tagger.py <planner_model> <test_set> --embed_dir=<sent_rep_dir>
 ```
+
+## Evaluating simplification
+Below is an example of how to evaluate simplification outputs for the PG_Dyn system. BARTScore is disabled by default but can be enabled by pointing to a model via the `--bartscore_path` flag.
+
+```bash
+# evaluate simplification performance
+python plan_simp/scripts/eval_simp.py \
+  --input_data=examples/wikiauto_docs_valid.csv \ # document-level input
+  --output_data=test_out.csv \ # sentence-level predictions (will be automatically merged)
+  --x_col=complex \
+  --r_col=simple \
+  --y_col=pred \
+  --doc_id_col=pair_id \
+  --prepro=True \
+  --sent_level=True
+```
