@@ -194,8 +194,10 @@ class RobertaClfFinetuner(pl.LightningModule):
     def validation_epoch_end(self, outputs, prefix="val"):
         loss = torch.stack([x["loss"] for x in outputs]).mean()
         self.log(f"{prefix}_loss", loss)
-        macro_f1 = np.stack([x["macro_f1"] for x in outputs]).mean()
-        self.log(f"{prefix}_macro_f1", macro_f1)
+
+        if not self.has_param("regression"):
+            macro_f1 = np.stack([x["macro_f1"] for x in outputs]).mean()
+            self.log(f"{prefix}_macro_f1", macro_f1)
         
         # log relative performance for each class
         if self.hparams.log_class_acc:
