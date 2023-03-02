@@ -163,7 +163,10 @@ class RobertaDataModule(pl.LightningDataModule):
             data = {**data, **context_data}
 
         if labels is not None:
-            data["labels"] = torch.tensor(labels)
+            if self.has_param("regression"):
+                data["labels"] = torch.tensor(labels, dtype=torch.float64)
+            else:
+                data["labels"] = torch.tensor(labels)
 
         return data
 

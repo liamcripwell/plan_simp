@@ -121,6 +121,7 @@ class RobertaClfFinetuner(pl.LightningModule):
         self.save_hyperparameters(params)
 
         num_labels = 5 if self.has_param("multi_split") else 4
+        num_labels = 1 if self.has_param("regression") else num_labels
         self.hparams["num_labels"] = num_labels
         self.op_tokens = OP_TOKENS if not self.has_param("multi_split") else M_OP_TOKENS
 
@@ -168,13 +169,14 @@ class RobertaClfFinetuner(pl.LightningModule):
         loss = output["loss"]
         logits = output["logits"].cpu()
 
-        macro_f1 = precision_recall_fscore_support(batch["labels"].cpu(), logits.argmax(axis=1), average="macro")[2]
-
         output = {
             "loss": loss,
             "preds": logits,
-            "macro_f1": macro_f1
         }
+
+        if not self.has_param("regression"):
+            macro_f1 = precision_recall_fscore_support(batch["labels"].cpu(), logits.argmax(axis=1), average="macro")[2]
+            output["macro_f1"] = macro_f1
 
         # accumalte relative acc for each class
         if self.hparams.log_class_acc:
@@ -297,5 +299,7 @@ class RobertaClfFinetuner(pl.LightningModule):
         parser.add_argument("--simple_context_doc_id", type=str, default=None, required=False,)
         parser.add_argument("--simple_context_dir", type=str, default=None, required=False,)
         parser.add_argument("--binary_clf", action="store_true")
+
+        parser.add_argument("--regression", action="store_true")
 
         return parser
