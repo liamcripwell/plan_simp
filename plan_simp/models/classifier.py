@@ -6,7 +6,7 @@ from tqdm import tqdm
 import pytorch_lightning as pl
 from sklearn.metrics import precision_recall_fscore_support
 from torch.utils.data import DataLoader
-from transformers import AdamW, RobertaTokenizer, RobertaForSequenceClassification, AutoModel, AutoConfig
+from transformers import AdamW, RobertaTokenizer, RobertaForSequenceClassification, AutoModelForSequenceClassification, AutoConfig
 
 from plan_simp.data.roberta import RobertaDataModule
 from plan_simp.data.utils import OP_TOKENS, M_OP_TOKENS, READING_LVLS, prepend_tokens
@@ -22,7 +22,7 @@ def load_planner(model_ckpt, add_context=False, tokenizer=None, device="cuda", r
 
     # prepare AutoClass to handle custom models
     AutoConfig.register("context-roberta", ContextRobertaConfig)
-    AutoModel.register(ContextRobertaConfig, RobertaForContextualSequenceClassification)
+    AutoModelForSequenceClassification.register(ContextRobertaConfig, RobertaForContextualSequenceClassification)
 
     # load model from file if needed
     if isinstance(model_ckpt, str):
@@ -32,7 +32,7 @@ def load_planner(model_ckpt, add_context=False, tokenizer=None, device="cuda", r
             model = RobertaClfFinetuner.load_from_checkpoint(model_ckpt, add_context=add_context).to(device).eval()
         else:
             # load directly from HuggingFace pretrained model
-            model = AutoModel.from_pretrained(model_ckpt).to(device).eval()
+            model = AutoModelForSequenceClassification.from_pretrained(model_ckpt).to(device).eval()
             tokenizer = RobertaTokenizer.from_pretrained(model_ckpt)
     else:
         model = model_ckpt # allow explicit passing of model object
