@@ -174,7 +174,11 @@ class RobertaClfFinetuner(pl.LightningModule):
             "preds": logits,
         }
 
-        if not self.has_param("regression"):
+        if self.has_param("regression"):
+            if self.has_param("log_doc_mae"):
+                output["doc_ids"] = batch["doc_ids"]
+                output["labels"] = batch["labels"]
+        else:
             macro_f1 = precision_recall_fscore_support(batch["labels"].cpu(), logits.argmax(axis=1), average="macro")[2]
             output["macro_f1"] = macro_f1
 
@@ -198,6 +202,24 @@ class RobertaClfFinetuner(pl.LightningModule):
         if not self.has_param("regression"):
             macro_f1 = np.stack([x["macro_f1"] for x in outputs]).mean()
             self.log(f"{prefix}_macro_f1", macro_f1)
+        else:
+            # compute document-level MAE when doing regression
+            if self.has_param("log_doc_mae"):
+                flat_preds = [y for ys in outputs for y in ys["preds"]]
+                flat_labels = [y for ys in outputs for y in ys["labels"]]
+                doc_ids = [y for ys in outputs for y in ys["doc_ids"]]
+                doc_preds = {}
+                doc_labs = {}
+                for i in range(len(doc_ids)):
+                    if doc_ids[i] not in doc_preds:
+                        doc_preds[doc_ids[i]] = [flat_preds[i]]
+                        doc_labs[doc_ids[i]] = flat_labels[i]
+                    else:
+                        doc_preds[doc_ids[i]].append(flat_preds[i])
+                doc_errs = []
+                for k, v in doc_preds.items():
+                    doc_errs.append( abs(np.mean(v) - doc_labs[k]) )
+                self.log(f"{prefix}_doc_mae", np.mean(doc_errs))
         
         # log relative performance for each class
         if self.hparams.log_class_acc:
@@ -303,5 +325,6 @@ class RobertaClfFinetuner(pl.LightningModule):
         parser.add_argument("--binary_clf", action="store_true")
 
         parser.add_argument("--regression", action="store_true")
+        parser.add_argument("--log_doc_mae", action="store_true")
 
         return parser

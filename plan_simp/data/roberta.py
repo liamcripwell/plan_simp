@@ -116,9 +116,15 @@ class RobertaDataModule(pl.LightningDataModule):
             self.valid = list(zip(*valid_)) 
             self.test = list(zip(*test_))
         else:
-            self.train = list(zip(train_seqs, list(self.train[self.hparams.y_col])))
-            self.valid = list(zip(valid_seqs, list(self.valid[self.hparams.y_col])))
-            self.test = list(zip(test_seqs, list(self.test[self.hparams.y_col])))
+            if self.has_param("regression") and self.has_param("log_doc_mae"):
+                # add document ids to allow for high-level logging during regression
+                self.train = list(zip(train_seqs, list(self.train["pair_id"]), list(self.train[self.hparams.y_col])))
+                self.valid = list(zip(valid_seqs, list(self.valid["pair_id"]), list(self.valid[self.hparams.y_col])))
+                self.test = list(zip(test_seqs, list(self.test["pair_id"]), list(self.test[self.hparams.y_col])))
+            else:
+                self.train = list(zip(train_seqs, list(self.train[self.hparams.y_col])))
+                self.valid = list(zip(valid_seqs, list(self.valid[self.hparams.y_col])))
+                self.test = list(zip(test_seqs, list(self.test[self.hparams.y_col])))
 
     def train_dataloader(self):
         return DataLoader(self.train, batch_size=self.hparams.batch_size, shuffle=True, 
@@ -165,6 +171,8 @@ class RobertaDataModule(pl.LightningDataModule):
         if labels is not None:
             if self.has_param("regression"):
                 data["labels"] = torch.tensor(labels).float()
+                if self.has_param("log_doc_mae"):
+                    data["doc_ids"] = [x[1] for x in batch]
             else:
                 data["labels"] = torch.tensor(labels)
 
@@ -187,5 +195,5 @@ class RobertaDataModule(pl.LightningDataModule):
         # deduce whether batches contain labels
         num_batch_items = len(batch[0])
         num_expected = 1 + sum([self.has_param(p) for p in 
-                            ["add_context", "simple_context_dir", "doc_pos_embeds"]])
+                            ["add_context", "simple_context_dir", "doc_pos_embeds", "log_doc_mae"]])
         return num_batch_items > num_expected
