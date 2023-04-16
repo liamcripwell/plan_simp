@@ -4,6 +4,7 @@ import numpy as np
 import torch
 from tqdm import tqdm
 import pytorch_lightning as pl
+from scipy.stats import entropy
 from sklearn.metrics import precision_recall_fscore_support
 from torch.utils.data import DataLoader
 from transformers import AdamW, RobertaTokenizer, RobertaForSequenceClassification, AutoModelForSequenceClassification, AutoConfig
@@ -175,9 +176,9 @@ class RobertaClfFinetuner(pl.LightningModule):
         }
 
         if self.has_param("regression"):
+            output["labels"] = batch["labels"]
             if self.has_param("log_doc_mae"):
                 output["doc_ids"] = batch["doc_ids"]
-                output["labels"] = batch["labels"]
         else:
             macro_f1 = precision_recall_fscore_support(batch["labels"].cpu(), logits.argmax(axis=1), average="macro")[2]
             output["macro_f1"] = macro_f1
@@ -203,10 +204,23 @@ class RobertaClfFinetuner(pl.LightningModule):
             macro_f1 = np.stack([x["macro_f1"] for x in outputs]).mean()
             self.log(f"{prefix}_macro_f1", macro_f1)
         else:
+            flat_preds = [y for ys in outputs for y in ys["preds"]]
+            flat_labels = [y for ys in outputs for y in ys["labels"]]
+
+            # log entropies
+            density, _ = np.histogram(flat_preds, density=True, bins=20)
+            self.log(f"{prefix}_entropy", entropy(density, base=2))
+            class_preds = [[] for _ in range(self.model.num_labels)]
+            for i in range(len(flat_preds)):
+                class_preds[flat_labels[i]].append(flat_preds[i])
+            ents = []
+            for l in range(self.model.num_labels):
+                density, _ = np.histogram(class_preds[l], density=True, bins=20)
+                ents += [entropy(density, base=2)]
+            self.log(f"{prefix}_macro_entropy", np.mean(ents))
+
             # compute document-level MAE when doing regression
             if self.has_param("log_doc_mae"):
-                flat_preds = [y for ys in outputs for y in ys["preds"]]
-                flat_labels = [y for ys in outputs for y in ys["labels"]]
                 doc_ids = [y for ys in outputs for y in ys["doc_ids"]]
                 doc_preds = {}
                 doc_labs = {}
