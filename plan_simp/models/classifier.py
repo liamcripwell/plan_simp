@@ -5,7 +5,7 @@ import torch
 from tqdm import tqdm
 import pytorch_lightning as pl
 from scipy.stats import entropy
-from sklearn.metrics import precision_recall_fscore_support
+from sklearn.metrics import precision_recall_fscore_support, mean_absolute_error
 from torch.utils.data import DataLoader
 from transformers import AdamW, RobertaTokenizer, RobertaForSequenceClassification, AutoModelForSequenceClassification, AutoConfig
 
@@ -112,6 +112,34 @@ def run_classifier(model_ckpt, test_set, x_col="complex", max_samples=None, toke
     
     return preds
 
+def soft_round(x, alpha, eps=torch.tensor(1e-3)):
+    """
+    Differentiable approximation to `round`.
+
+    Larger alphas correspond to closer approximations of the round function.
+    If alpha is close to zero, this function reduces to the identity.
+
+    This is described in Sec. 4.1. in the paper
+    > "Universally Quantized Neural Compression"<br />
+    > Eirikur Agustsson & Lucas Theis<br />
+    > https://arxiv.org/abs/2006.09952
+    """
+    eps = eps.to(x.device)
+    alpha = alpha.to(x.device)
+
+    # This guards the gradient of tf.where below against NaNs, while maintaining
+    # correctness, as for alpha < eps the result is ignored.
+    alpha_bounded = torch.maximum(alpha, eps)
+
+    m = torch.floor(x) + .5
+    r = x - m
+    z = torch.tanh(alpha_bounded / 2.) * 2.
+    y = m + torch.tanh(alpha_bounded * r) / z
+
+
+    # For very low alphas, soft_round behaves like identity
+    return torch.where(alpha < eps, x, y)
+
 
 class RobertaClfFinetuner(pl.LightningModule):
 
@@ -153,9 +181,11 @@ class RobertaClfFinetuner(pl.LightningModule):
         return self.model(input_ids, **kwargs)
 
     def training_step(self, batch, batch_idx):
-        output = self.model(**batch, return_dict=True)
+        output = self.model(**{k:v for k, v in batch.items() if k not in ["doc_ids"]}, return_dict=True)
         loss = output["loss"]
         self.train_losses.append(loss)
+
+        loss = soft_round(loss, alpha=torch.tensor(7, device="cuda"))
 
         # logging mean loss every `n` steps
         if batch_idx % int(self.hparams.train_check_interval * self.trainer.num_training_batches) == 0:
@@ -166,7 +196,7 @@ class RobertaClfFinetuner(pl.LightningModule):
         return {"loss": loss}
 
     def validation_step(self, batch, batch_idx):
-        output = self.model(**batch, return_dict=True)
+        output = self.model(**{k:v for k, v in batch.items() if k not in ["doc_ids"]}, return_dict=True)
         loss = output["loss"]
         logits = output["logits"].cpu()
 
@@ -204,15 +234,15 @@ class RobertaClfFinetuner(pl.LightningModule):
             macro_f1 = np.stack([x["macro_f1"] for x in outputs]).mean()
             self.log(f"{prefix}_macro_f1", macro_f1)
         else:
-            flat_preds = [y for ys in outputs for y in ys["preds"]]
-            flat_labels = [y for ys in outputs for y in ys["labels"]]
+            flat_preds = [y.item() for ys in outputs for y in ys["preds"]]
+            flat_labels = [y.item() for ys in outputs for y in ys["labels"]]
 
             # log entropies
             density, _ = np.histogram(flat_preds, density=True, bins=20)
             self.log(f"{prefix}_entropy", entropy(density, base=2))
-            class_preds = [[] for _ in range(self.model.num_labels)]
+            class_preds = [[] for _ in range(5)] # assuming 5 classes (0-4)
             for i in range(len(flat_preds)):
-                class_preds[flat_labels[i]].append(flat_preds[i])
+                class_preds[int(flat_labels[i])].append(flat_preds[i])
             ents = []
             for l in range(self.model.num_labels):
                 density, _ = np.histogram(class_preds[l], density=True, bins=20)
@@ -230,10 +260,12 @@ class RobertaClfFinetuner(pl.LightningModule):
                         doc_labs[doc_ids[i]] = flat_labels[i]
                     else:
                         doc_preds[doc_ids[i]].append(flat_preds[i])
-                doc_errs = []
+                doc_means = []
+                doc_gts = []
                 for k, v in doc_preds.items():
-                    doc_errs.append( abs(np.mean(v) - doc_labs[k]) )
-                self.log(f"{prefix}_doc_mae", np.mean(doc_errs))
+                    doc_means.append(np.mean(v))
+                    doc_gts.append(doc_labs[k])
+                self.log(f"{prefix}_doc_mae", mean_absolute_error(doc_gts, doc_means))
         
         # log relative performance for each class
         if self.hparams.log_class_acc:
