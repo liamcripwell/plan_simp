@@ -1,8 +1,10 @@
 # plan_simp
 
-This repo will contain code and resources for the EACL 2023 paper, _Document-Level Planning for Text Simplification_.
+This repo will contain code and resources for the EACL 2023 paper, [_Document-Level Planning for Text Simplification_](https://aclanthology.org/2023.eacl-main.70/).
 
 We will progressively update with code, instructions, pretrained models, data, etc. as soon as we can make them available.
+
+```
 
 ## Installation
 
@@ -13,7 +15,7 @@ pip install -e .
 ```
 
 ## Pretrained models
-We provide pretrained models for the components of our contextual planning system "PG_Dyn" on [HuggingFace](https://huggingface.co/liamcripwell).
+We provide pretrained models for the components of our contextual planning system `PG_Dyn` on [HuggingFace](https://huggingface.co/liamcripwell).
 
 These can be loaded within Python as follows:
 ```python
@@ -147,3 +149,22 @@ python plan_simp/scripts/eval_simp.py \
   --prepro=True \
   --sent_level=True
 ```
+
+## Citation
+
+If you find this repository useful, please cite our publication [Document-Level Planning for Text Simplification](https://aclanthology.org/2023.eacl-main.70/).
+
+```bibtex
+@inproceedings{cripwell-etal-2023-document,
+    title = "Document-Level Planning for Text Simplification",
+    author = {Cripwell, Liam  and
+      Legrand, Jo{\"e}l  and
+      Gardent, Claire},
+    booktitle = "Proceedings of the 17th Conference of the European Chapter of the Association for Computational Linguistics",
+    month = may,
+    year = "2023",
+    address = "Dubrovnik, Croatia",
+    publisher = "Association for Computational Linguistics",
+    url = "https://aclanthology.org/2023.eacl-main.70",
+    pages = "993--1006",
+}
