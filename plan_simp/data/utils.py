@@ -1,7 +1,10 @@
 import os
-from typing import List, Dict
+import re
+import math
+from typing import Dict
 
 import torch
+import pandas as pd
 
 CLASS_LABELS = {"ignore": 0, "rephrase": 1, "split": 2, "delete": 3}
 M_CLASS_LABELS = {"ignore": 0, "rephrase": 1, "ssplit": 2, "dsplit": 3, "delete": 4}
@@ -214,3 +217,76 @@ def prepare_batch_context(self, batch, labels, bart=False):
         data["document_position_ids"] = torch.stack(doc_pos_ids)
 
     return data
+
+def merge_preds_to_paras(df, df_para, sent_col="simple", new_col="pred"):
+    # clean nan predictions
+    df.pred = [row.pred if not row.isna().pred else "" for i, row in df.iterrows()]
+
+    preds = []
+    for _, para in df_para.iterrows():
+        sents = list(df[(df.pair_id == para.pair_id) & (df.para_id == para.para_id)].sort_values(by=["sent_id"])[sent_col])
+
+        # handle list columns
+        if len(sents[0]) > 0 and sents[0][0] == "[":
+            sents = [" ".join(eval(ss)) for ss in sents]
+
+        preds.append(" ".join(sents))
+    df_para_new = df_para.copy()
+    df_para_new[new_col] = preds
+
+    return df_para_new
+
+def docs_to_sents(df, keep_align=True):
+    items = []
+    for i, row in df.iterrows():
+        c_sents = eval(row.complex)
+        s_sents = eval(row.simple)
+        for j in range(len(c_sents)):
+            # get positional info
+            pos = (j + 1) / row.num_c_sents
+            quint = math.ceil(pos / 0.2)
+
+            if keep_align:
+                simple = " ".join(s_sents[j])
+
+                # flatten simple doc to get aligned S sent index for C sent
+                simp_sent_id = len([s for c in eval(row.simple)[:j] for s in c])
+            else:
+                simp_sent_id = min(j, len(s_sents)-1)
+                simple = s_sents[simp_sent_id]
+
+            items.append( (row.title, row.pair_id, j, c_sents[j], simple, simp_sent_id,
+                            eval(row.para_id)[j], pos, quint, row.num_c_sents) )
+
+    df_sent = pd.DataFrame(items, columns=['title', 'pair_id', 'sent_id', 'complex', 'simple', "simp_sent_id",
+                                           "para_id", "doc_pos", "doc_quint", "doc_len"])
+    return df_sent
+
+def sents_to_paras(df):
+    items = []
+    for title in df.title.unique():
+        rows = df[df.title == title]
+        for para in rows.para_id.unique():
+            sents = rows[rows.para_id == para]
+            items.append( (title, sents.iloc[0].pair_id, sents.iloc[0].para_id, list(sents.sent_id), 
+                            " <s> ".join(sents.complex).strip(), " <s> ".join(sents.simple).strip(), 
+                            list(sents.simp_sent_id), list(sents.doc_pos), list(sents.doc_quint), list(sents.doc_len)) )
+    
+    df_para = pd.DataFrame(items, columns=['title', 'pair_id', "para_id", 'sent_id', 'complex', 'simple', 
+                                            "simp_sent_id", "doc_pos", "doc_quint", "doc_len"])
+    return df_para
+
+def get_pred_doc_sequences(df, text_col="pred", doc_id_col="pair_id", text_id_col="sent_id", order=None):
+    """Return list of document sequences."""
+    df[text_col] = df[text_col].fillna("") # clean empty preds (deletes)
+
+    if order is None:
+        order = df[doc_id_col].unique()
+
+    doc_seqs = []
+    for doc_id in order:
+        texts = df[df[doc_id_col] == doc_id].sort_values(by=[text_id_col])[text_col]
+        out_str = re.sub(" +", " ", " ".join(texts)).strip() # join sents and remove extra whitespace
+        doc_seqs.append(out_str)
+    
+    return doc_seqs
