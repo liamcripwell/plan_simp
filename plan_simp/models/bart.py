@@ -8,19 +8,24 @@ from tqdm import tqdm
 import pytorch_lightning as pl
 from sacrebleu import corpus_bleu
 from torch.utils.data import DataLoader
-from transformers import BartTokenizerFast, AutoModelForSeq2SeqLM, BartForConditionalGeneration, AutoTokenizer
+from transformers import BartTokenizerFast, AutoModelForSeq2SeqLM, BartForConditionalGeneration, LEDForConditionalGeneration, AutoConfig, AutoTokenizer
 
 from plan_simp.utils import lmap
 from plan_simp.data.bart import BartDataModule
-from plan_simp.data.utils import CLASS_LABELS, M_CLASS_LABELS, OP_TOKENS, M_OP_TOKENS, READING_LVLS, prepend_tokens
+from plan_simp.data.utils import CLASS_LABELS, M_CLASS_LABELS, OP_TOKENS, M_OP_TOKENS, READING_LVLS, PLAN_TOKENS, prepend_tokens
+from plan_simp.models.custom_bart import BartForContextualGeneration, ContextBartConfig
 
-INF_PARAMS = ["class_labels", "op_tokens", "max_length"]
+INF_PARAMS = ["class_labels", "op_tokens", "max_length", "add_context", "context_window", "plan_prefix", "plan_sep"]
 
 
 def load_simplifier(model_ckpt, tokenizer=None, device="cuda", return_ptl=False):
     """
     Loads and prepares any BART-based simplification model and associated components.
     """
+
+    # prepare AutoClass to handle custom models
+    AutoConfig.register("context-bart", ContextBartConfig)
+    AutoModelForSeq2SeqLM.register(ContextBartConfig, BartForContextualGeneration)
 
     if isinstance(model_ckpt, str):
         print("Loading simplification model...")
@@ -43,7 +48,7 @@ def load_simplifier(model_ckpt, tokenizer=None, device="cuda", return_ptl=False)
         if not return_ptl:
             model.model.config.update(hparams) # directly update internal model config
             model = model.model
-    elif isinstance(model, BartForConditionalGeneration):
+    elif isinstance(model, BartForConditionalGeneration) or isinstance(model, LEDForConditionalGeneration) or isinstance(BartForContextualGeneration):
         hparams = {p: getattr(model.config, p, None) for p in INF_PARAMS}
         if tokenizer is None:
             raise ValueError("A HuggingFace pretrained model must be accompanied by a tokenizer!")
@@ -53,7 +58,9 @@ def load_simplifier(model_ckpt, tokenizer=None, device="cuda", return_ptl=False)
 
 def run_generator(model_ckpt, test_set, x_col="complex", op_col=None, reading_lvl=None,
                     tokenizer=None, max_samples=None, device="cuda", batch_size=16, 
-                    num_workers=32, beams=5, length_penalty=1.0, min_length=False, silent=False):
+                    num_workers=32, beams=5, length_penalty=1.0, min_length=False, silent=False,
+                    context_dir=None, context_doc_id="pair_id", simple_context_dir=None, 
+                    simple_context_doc_id="pair_id", simple_sent_id="simp_sent_id"):
     if max_samples is not None:
         test_set = test_set[:max_samples]
 
@@ -66,10 +73,26 @@ def run_generator(model_ckpt, test_set, x_col="complex", op_col=None, reading_lv
         else:
             input_seqs = test_set if isinstance(test_set, list) else test_set[x_col].tolist()
 
-        inputs = list(zip(input_seqs))
-
         # preprocess data
         dm = BartDataModule(tokenizer, params=hparams)
+        dm.hparams.context_dir = context_dir
+        dm.hparams.simple_context_dir = simple_context_dir
+
+        inputs = [input_seqs]
+
+        # load contextual representations
+        if dm.has_param("add_context"):
+            context_ids = dm.prepare_context_ids(test_set, context_doc_id)
+            inputs.append(context_ids)
+            if simple_context_dir is not None:
+                simple_context_ids = dm.prepare_context_ids(test_set, simple_context_doc_id, simple_sent_id)
+                inputs.append(simple_context_ids)
+            pos_info = list(test_set[["doc_pos", "doc_len"]].itertuples(index=False, name=None))
+            inputs.append(pos_info)
+
+        inputs.append(["" for _ in input_seqs]) # empty labels
+        inputs = list(zip(*inputs))
+
         test_data = DataLoader(inputs, batch_size=batch_size, num_workers=num_workers, collate_fn=dm.prepro_collate)
 
         # predict output sequences
@@ -90,7 +113,7 @@ def run_generator(model_ckpt, test_set, x_col="complex", op_col=None, reading_lv
             )
             
             # convert generated token ids to text
-            skip_specials = True
+            skip_specials = not (dm.has_param("plan_prefix") or dm.has_param("plan_sep")) # don't skip when also planning
             gen_text = tokenizer.batch_decode(
                 generated_ids,
                 skip_special_tokens=skip_specials,
@@ -118,8 +141,17 @@ class BartFinetuner(pl.LightningModule):
         self.op_tokens = OP_TOKENS if not self.has_param("multi_split") else M_OP_TOKENS
         self.hparams["class_labels"], self.hparams["op_tokens"] = self.class_labels, self.op_tokens
 
-        self.model = AutoModelForSeq2SeqLM.from_pretrained(model_name_or_path, return_dict=True)
-        print(f"Initial {type(self.model)} model loaded from {model_name_or_path}.")
+        # handle Longformer option NOTE: BartTokenizer should still work for Longformer
+        if self.has_param("longformer"):
+            if model_name_or_path == "facebook/bart-base":
+                model_name_or_path = "allenai/led-base-16384"
+
+        if self.has_param("add_context"):
+            self.model = BartForContextualGeneration.from_pretrained(model_name_or_path, return_dict=True)
+            print(f"Initial {type(self.model)} model loaded from {model_name_or_path}.")
+        else:
+            self.model = AutoModelForSeq2SeqLM.from_pretrained(model_name_or_path, return_dict=True)
+            print(f"Initial {type(self.model)} model loaded from {model_name_or_path}.")
 
         if tokenizer is None:
             self.tokenizer = BartTokenizerFast.from_pretrained(model_name_or_path, add_prefix_space=True)
@@ -129,6 +161,11 @@ class BartFinetuner(pl.LightningModule):
 
         # training loss cache to log mean every n steps
         self.train_losses = []
+
+        if self.has_param("plan_loss"):
+            self.loss_names = ["loss", "gen_loss", "plan_loss"]
+            # get vocab ids for plan operation tokens
+            self.plan_op_tok_ids = self.tokenizer.convert_tokens_to_ids(self.op_tokens)
 
     @property
     def pad(self) -> int:
@@ -148,6 +185,17 @@ class BartFinetuner(pl.LightningModule):
         # compute loss
         ce_loss_fct = torch.nn.CrossEntropyLoss(ignore_index=self.pad)
         gen_loss = ce_loss_fct(lm_logits.view(-1, lm_logits.shape[-1]), labels.view(-1))
+
+        # compute planning loss
+        if self.has_param("plan_loss"):
+            plan_loss_fct = torch.nn.CrossEntropyLoss(reduction="none")
+            plan_masked_lm_loss = plan_loss_fct(lm_logits.view(-1, self.model.config.vocab_size), labels.view(-1))
+            plan_token_mask = torch.isin(labels.view(-1), torch.tensor(self.plan_op_tok_ids, device="cuda"))
+            plan_loss = plan_masked_lm_loss[plan_token_mask].mean()
+
+            comb_loss = (gen_loss * (1-self.hparams["plan_loss"])) + (plan_loss * self.hparams["plan_loss"])
+
+            return (comb_loss, gen_loss, plan_loss)
 
         return (gen_loss,)
 
@@ -254,6 +302,8 @@ class BartFinetuner(pl.LightningModule):
 
     def add_new_tokens(self):
         self.tokenizer.add_tokens(READING_LVLS + self.op_tokens, special_tokens=True)
+        if self.has_param("plan_prefix") and not self.has_param("sent_level"):
+             self.tokenizer.add_tokens(PLAN_TOKENS)
         self.model.resize_token_embeddings(len(self.tokenizer))
 
     # UTILITY FUNCTIONS #
@@ -345,6 +395,20 @@ class BartFinetuner(pl.LightningModule):
         parser.add_argument("--reading_lvl", type=str, default=None, required=False)
         parser.add_argument("--op_col", type=str, default=None, required=False)
         parser.add_argument("--sent_level", action="store_true")
-    
+
+        parser.add_argument("--longformer", action="store_true")
+
+        parser.add_argument("--add_context", action="store_true")
+        parser.add_argument("--context_window", type=int, default=13)
+        parser.add_argument("--context_doc_id", type=str, default=None, required=False,)
+        parser.add_argument("--context_dir", type=str, default=None, required=False,)
+        parser.add_argument("--simple_context_doc_id", type=str, default=None, required=False,)
+        parser.add_argument("--simple_context_dir", type=str, default=None, required=False,)
+
+        parser.add_argument("--plan_prefix", action="store_true")
+        parser.add_argument("--prefix_only", action="store_true")
+        parser.add_argument("--plan_loss", type=float, default=None)
+        parser.add_argument("--plan_sep", action="store_true")
+        parser.add_argument("--plan_col", type=str, default="labels", required=False,)
 
         return parser

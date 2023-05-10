@@ -26,6 +26,31 @@ DEFAULT_METRICS = ["bart", "dsari", "sari", "fkgl", "smart", "bleu"]
 def read_file(filename):
     return [d.strip() for d in open(filename).readlines()]
 
+def clean_sequences(input_seqs, output_seqs, ref_seqs=[]):
+    """
+    `input_seqs`: List[str]
+    `output_seqs`: List[str]
+    `ref_seqs`: List[List[str]]
+    """
+    # filter out special content
+    output_seqs = [re.sub(r"\[PLAN\].*\[SIMPLIFICATION\]", "", t) for t in output_seqs] # prefix plan
+    # plan separators NOTE: only works for 4 class plans
+    output_seqs = [re.sub(r"(\<COPY\>|\<REPHRASE\>|\<SPLIT\>|\<DELETE\>)", "", t) for t in output_seqs]
+    # sep tokens
+    input_seqs = [re.sub(r"\<\\?/?s\>", "", t) for t in input_seqs]
+    input_seqs = [re.sub(r"\<\SEP\>", "", t) for t in input_seqs]
+    ref_seqs = [[re.sub(r"\<\\?/?s\>", "", t[0])] for t in ref_seqs]
+    ref_seqs = [[re.sub(r"\<SEP\>", "", t[0])] for t in ref_seqs]
+    output_seqs = [re.sub(r"\<\\?/?s\>", "", t) for t in output_seqs]
+    # padding
+    output_seqs = [re.sub(r"\<pad\>", "", t) for t in output_seqs]
+    # excess spaces
+    input_seqs = [re.sub(r" +", " ", t) for t in input_seqs]
+    output_seqs = [re.sub(r" +", " ", t) for t in output_seqs]
+    ref_seqs = [[re.sub(r" +", " ", t[0])] for t in ref_seqs]
+
+    return input_seqs, output_seqs, ref_seqs
+
 def calculate_saris(in_doc, out_doc, ref_docs, easse=True):
     if easse:
         # EASSE base-implementation
@@ -125,6 +150,7 @@ def evaluate(input_data, output_data=None, ref_data=None, prepro=False, x_col=No
         output_data[y_col] = output_data[y_col].fillna("") # clean empty preds (deletes)
         for i, row in input_data.iterrows():
             d_id = row[doc_id_col]
+            # NOTE: this should also work for paragraphs where the the id of the first sentence is in the `sent_id` column
             sents = list(output_data[output_data[doc_id_col] == d_id].sort_values(by=["sent_id"])[y_col])
 
             # clean output before saving
@@ -134,20 +160,8 @@ def evaluate(input_data, output_data=None, ref_data=None, prepro=False, x_col=No
         assert len(input_seqs) == len(doc_outputs)
         output_seqs = doc_outputs
 
-    # plan separators NOTE: only works for 4 class plans
-    output_seqs = [re.sub(r"(\<COPY\>|\<REPHRASE\>|\<SPLIT\>|\<DELETE\>)", "", t) for t in output_seqs]
-    # sep tokens
-    input_seqs = [re.sub(r"\<\\?/?s\>", "", t) for t in input_seqs]
-    input_seqs = [re.sub(r"\<\SEP\>", "", t) for t in input_seqs]
-    ref_seqs = [[re.sub(r"\<\\?/?s\>", "", t[0])] for t in ref_seqs]
-    ref_seqs = [[re.sub(r"\<SEP\>", "", t[0])] for t in ref_seqs]
-    output_seqs = [re.sub(r"\<\\?/?s\>", "", t) for t in output_seqs]
-    # padding
-    output_seqs = [re.sub(r"\<pad\>", "", t) for t in output_seqs]
-    # excess spaces
-    input_seqs = [re.sub(r" +", " ", t) for t in input_seqs]
-    output_seqs = [re.sub(r" +", " ", t) for t in output_seqs]
-    ref_seqs = [[re.sub(r" +", " ", t[0])] for t in ref_seqs]
+    # clean sequences of special tokens, whitespace, etc.
+    input_seqs, output_seqs, ref_seqs = clean_sequences(input_seqs, output_seqs, ref_seqs)
 
     if prepro:
         tokenizer = BartTokenizer.from_pretrained('facebook/bart-base', add_prefix_space=False)

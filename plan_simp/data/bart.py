@@ -7,7 +7,9 @@ import pytorch_lightning as pl
 from torch.utils.data import DataLoader
 
 from plan_simp.data.utils import (
-    CLASS_LABELS, M_CLASS_LABELS, M_OP_TOKENS, OP_TOKENS, prepend_tokens
+    CLASS_LABELS, M_CLASS_LABELS, M_OP_TOKENS, OP_TOKENS,
+    prepend_tokens, prepare_batch_context, prepare_plan_prefixes, 
+    prepare_plan_seps, prepare_plan_seqs,
 )
 
 
@@ -67,10 +69,44 @@ class BartDataModule(pl.LightningDataModule):
         valid_ = [valid_seqs]
         test_ = [test_seqs]
         
-        # include standard labels
-        train_.append(train_labels)
-        valid_.append(valid_labels)
-        test_.append(test_labels)
+        # prepare context document ids
+        if self.has_param("add_context"):
+            train_.append(self.prepare_context_ids(self.train, self.hparams.context_doc_id))
+            valid_.append(self.prepare_context_ids(self.train, self.hparams.context_doc_id))
+            test_.append(self.prepare_context_ids(self.train, self.hparams.context_doc_id))
+
+            # include simple document ids in case of dynamic context option
+            if self.has_param("simple_context_dir"):
+                train_.append(self.prepare_context_ids(self.train, self.hparams.simple_context_doc_id, "simp_sent_id"))
+                valid_.append(self.prepare_context_ids(self.valid, self.hparams.simple_context_doc_id, "simp_sent_id"))
+                test_.append(self.prepare_context_ids(self.test, self.hparams.simple_context_doc_id, "simp_sent_id"))
+
+            # include document position information
+            train_.append(list(self.train[["doc_pos", "doc_len"]].itertuples(index=False, name=None)))
+            valid_.append(list(self.valid[["doc_pos", "doc_len"]].itertuples(index=False, name=None)))
+            test_.append(list(self.test[["doc_pos", "doc_len"]].itertuples(index=False, name=None)))
+        
+        # plan multi-tasking preparation (NOTE: Doc-BART support only)
+        if self.has_param("plan_prefix"): # assumes --plan_col is set
+            if self.has_param("prefix_only"):
+                # only perform planning task
+                train_.append(prepare_plan_seqs(self.train, self.hparams.plan_col, self.class_labels, self.op_tokens))
+                valid_.append(prepare_plan_seqs(self.valid, self.hparams.plan_col, self.class_labels, self.op_tokens))
+                test_.append(prepare_plan_seqs(self.test, self.hparams.plan_col, self.class_labels, self.op_tokens))
+            else:
+                # labels with plan and simplification parts
+                train_.append(prepare_plan_prefixes(self.train, self.hparams.y_col, self.hparams.plan_col, self.class_labels, self.op_tokens, sent_level=self.has_param("sent_level")))
+                valid_.append(prepare_plan_prefixes(self.valid, self.hparams.y_col, self.hparams.plan_col, self.class_labels, self.op_tokens, sent_level=self.has_param("sent_level")))
+                test_.append(prepare_plan_prefixes(self.test, self.hparams.y_col, self.hparams.plan_col, self.class_labels, self.op_tokens, sent_level=self.has_param("sent_level")))
+        elif self.has_param("plan_sep"):
+            train_.append(prepare_plan_seps(self.train, self.hparams.y_col, self.hparams.plan_col, self.class_labels, self.op_tokens))
+            valid_.append(prepare_plan_seps(self.valid, self.hparams.y_col, self.hparams.plan_col, self.class_labels, self.op_tokens))
+            test_.append(prepare_plan_seps(self.test, self.hparams.y_col, self.hparams.plan_col, self.class_labels, self.op_tokens))
+        else:
+            # include standard labels
+            train_.append(train_labels)
+            valid_.append(valid_labels)
+            test_.append(test_labels)
 
         self.train = list(zip(*train_))
         self.valid = list(zip(*valid_))
@@ -102,11 +138,24 @@ class BartDataModule(pl.LightningDataModule):
 
         data = {}
 
+        # prepare context representations
+        if self.has_param("add_context"):
+            context_data = prepare_batch_context(self, batch, labels=labels, bart=True)
+            data = {**data, **context_data}
+
         data["input_ids"] = input_ids
         data["attention_mask"] = input_mask
         data["labels"] = labels
 
         return data
+    
+    def prepare_context_ids(self, df, doc_id_col="c_id", sent_id_col="sent_id"):
+        """Prepare context as lookup key."""
+        if sent_id_col is None:
+            # NOTE: this will be the case for simple context during dynamic generation
+            # here, we want to use the entire cached simple context, therefore we use -1 as the id
+            return [f"{row[doc_id_col]}{self.sep}{-1}" for _, row in df.iterrows()]
+        return [f"{row[doc_id_col]}{self.sep}{row[sent_id_col]}" for _, row in df.iterrows()]
 
     def has_param(self, param):
         """Check if param exists and has a non-negative/null value."""
