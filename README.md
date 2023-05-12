@@ -1,10 +1,10 @@
 # plan_simp
 
-This repo will contain code and resources for the EACL 2023 paper, [_Document-Level Planning for Text Simplification_](https://aclanthology.org/2023.eacl-main.70/).
+This repo contains code and resources for the following papers:
+* EACL 2023 paper, [_Document-Level Planning for Text Simplification_](https://aclanthology.org/2023.eacl-main.70/).
+* ACL 2023 Findings paper, [_Context-Aware Document Simplification_](https://arxiv.org/abs/2305.06274).
 
 We will progressively update with code, instructions, pretrained models, data, etc. as soon as we can make them available.
-
-```
 
 ## Installation
 
@@ -152,8 +152,9 @@ python plan_simp/scripts/eval_simp.py \
 
 ## Citation
 
-If you find this repository useful, please cite our publication [Document-Level Planning for Text Simplification](https://aclanthology.org/2023.eacl-main.70/).
+If you find this repository useful, please cite our publications: 
 
+* [Document-Level Planning for Text Simplification](https://aclanthology.org/2023.eacl-main.70/)
 ```bibtex
 @inproceedings{cripwell-etal-2023-document,
     title = "Document-Level Planning for Text Simplification",
@@ -168,3 +169,16 @@ If you find this repository useful, please cite our publication [Document-Level 
     url = "https://aclanthology.org/2023.eacl-main.70",
     pages = "993--1006",
 }
+```
+
+* [Context-Aware Document Simplification](https://arxiv.org/abs/2305.06274)
+```bibtex
+@misc{cripwell2023contextaware,
+      title={Context-Aware Document Simplification}, 
+      author={Liam Cripwell and Joël Legrand and Claire Gardent},
+      year={2023},
+      eprint={2305.06274},
+      archivePrefix={arXiv},
+      primaryClass={cs.CL}
+}
+```
