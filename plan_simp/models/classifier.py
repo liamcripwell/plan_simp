@@ -7,6 +7,7 @@ import pytorch_lightning as pl
 from scipy.stats import entropy
 from sklearn.metrics import precision_recall_fscore_support, mean_absolute_error
 from torch.utils.data import DataLoader
+from torch.nn import MSELoss
 from transformers import AdamW, RobertaTokenizer, RobertaForSequenceClassification, AutoModelForSequenceClassification, AutoConfig
 
 from plan_simp.data.roberta import RobertaDataModule
@@ -177,6 +178,8 @@ class RobertaClfFinetuner(pl.LightningModule):
         if "hidden_dropout_prob" in self.hparams and self.hparams.hidden_dropout_prob is not None:
             self.model.config.hidden_dropout_prob = self.hparams.hidden_dropout_prob
 
+        self.round_alpha = 0.0
+
     def forward(self, input_ids, **kwargs):
         return self.model(input_ids, **kwargs)
 
@@ -185,7 +188,10 @@ class RobertaClfFinetuner(pl.LightningModule):
         loss = output["loss"]
         self.train_losses.append(loss)
 
-        loss = soft_round(loss, alpha=torch.tensor(7, device="cuda"))
+        if self.has_param("log_doc_mae"):
+            logits = soft_round(output["logits"], alpha=torch.tensor(self.round_alpha, device=output["logits"].device))
+            loss_fct = MSELoss()
+            loss = loss_fct(logits.squeeze(), batch["labels"].squeeze())
 
         # logging mean loss every `n` steps
         if batch_idx % int(self.hparams.train_check_interval * self.trainer.num_training_batches) == 0:
@@ -273,6 +279,10 @@ class RobertaClfFinetuner(pl.LightningModule):
             f1s = np.nanmean(f1s, axis=0) # ignore nans in calculation
             for i in range(self.model.num_labels):
                 self.log(f"{prefix}_{i}_f1", f1s[i])
+
+        # update soft-rounding alpha
+        self.log("round_alpha", self.round_alpha)
+        #self.round_alpha = min(self.round_alpha+0.25, 10)
 
         return {f"{prefix}_loss": loss}
 
