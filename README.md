@@ -69,6 +69,19 @@ python plan_simp/scripts/generate.py inference
   --out_file=<output_csv> 
 ```
 
+Generation can also be performed within python (see the source code for more parameter details).
+
+```python
+# basic generation with no planning
+from plan_simp.models.bart import run_generator
+preds = run_generator(model_ckpt="liamcripwell/ledpara", **params)
+
+# dynamic plan-guided generation
+from plan_simp.scripts.generate import Launcher
+launcher = Launcher()
+launcher.dynamic(model_ckpt="liamcripwell/o-conbart", clf_model_ckpt="liamcripwell/pgdyn-plan", **params)
+```
+
 ## Training a planner
 
 The following commands show example use cases for training your own planner models.
@@ -135,7 +148,7 @@ python plan_simp/scripts/eval_tagger.py <planner_model> <test_set> --embed_dir=<
 ```
 
 ## Evaluating simplification
-Below is an example of how to evaluate simplification outputs for the PG_Dyn system. BARTScore is disabled by default but can be enabled by pointing to a model via the `--bartscore_path` flag.
+Below is an example of how to evaluate simplification outputs from the systems. BARTScore is disabled by default but can be enabled by pointing to a model via the `--bartscore_path` flag.
 
 ```bash
 # evaluate simplification performance
