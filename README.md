@@ -15,9 +15,9 @@ pip install -e .
 ```
 
 ## Pretrained models
-We provide pretrained models for the components of our contextual planning system `PG_Dyn` on [HuggingFace](https://huggingface.co/liamcripwell).
+We provide pretrained models for the components of our contextual planning system `PG_Dyn` as well as several of the models proposed in [_Context-Aware Document Simplification_](https://arxiv.org/abs/2305.06274) on [HuggingFace](https://huggingface.co/liamcripwell).
 
-These can be loaded within Python as follows:
+Systems can be loaded within Python as follows:
 ```python
 from plan_simp.models.classifier import load_planner
 from plan_simp.models.bart import load_simplifier
@@ -32,7 +32,7 @@ simplifier, tokenizer, hparams = load_simplifier("liamcripwell/pgdyn-simp")
 An example use-case of inference on out-of-domain test data is illustrated in [this script](examples/wikiauto_inference.sh).
 
 ## Preparing context representations
-We provide a script to generate sentence-level context encodings.
+We provide a script to generate sentence-level context encodings which are used within `pgdyn-plan` and `conbart`.
 
 ```bash
 # encode sentence-level context embeddings to be used by the planner
