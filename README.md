@@ -58,15 +58,23 @@ python plan_simp/scripts/generate.py dynamic
   --out_file=<output_csv> 
 ```
 
-Alternatively, plan-guided simplification can be formed with pre-determined operation labels.
+Alternatively, plan-guided simplification can be formed with pre-determined operation labels, or with no guidance at all.
 
 ```bash
+# plan-guidance with predefined operations in `"label"` column
 python plan_simp/scripts/generate.py inference 
   --model_ckpt=<simplification_model> # e.g. liamcripwell/pgdyn-simp
   --test_file=<test_sentences> 
   --op_col=label
   --reading_lvl=s_level 
   --out_file=<output_csv> 
+  
+# generation with end-to-end model (no plan guidance)
+python plan_simp/scripts/generate.py inference 
+    --model_ckpt=liamcripwell/ledpara 
+    --test_file=<test_data>
+    --reading_lvl=s_level 
+    --out_file=<output_csv> 
 ```
 
 Generation can also be performed within python (see the source code for more parameter details).
