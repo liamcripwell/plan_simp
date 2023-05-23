@@ -169,6 +169,11 @@ class RobertaDataModule(pl.LightningDataModule):
                 data["labels"] = torch.tensor(labels)
 
         return data
+    
+    def transfer_batch_to_device(self, batch, device, dataloader_idx):
+        # only send tensors to device
+        batch = {k: v.to(device=device) if isinstance(v, torch.Tensor) else v for k, v in batch.items()}
+        return batch
 
     def has_param(self, param):
         """Check if param exists and has a non-negative/null value."""

@@ -1,8 +1,8 @@
 import argparse
 
 import pytorch_lightning as pl
-from pytorch_lightning.plugins import DDPPlugin
 from pytorch_lightning.loggers import WandbLogger
+from pytorch_lightning.strategies import DDPStrategy
 from pytorch_lightning.callbacks import ModelCheckpoint
 
 from plan_simp.data.roberta import RobertaDataModule
@@ -49,8 +49,9 @@ if __name__ == '__main__':
         args,
         val_check_interval=args.val_check_interval,
         logger=wandb_logger,
-        accelerator="ddp",
-        plugins=DDPPlugin(find_unused_parameters=True),
+        accelerator="gpu",
+        strategy="ddp",
+        #plugins=DDPStrategy(find_unused_parameters=True),
         callbacks=checkpoint_callback,
         precision=16,)
 
