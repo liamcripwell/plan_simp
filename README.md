@@ -31,6 +31,9 @@ simplifier, tokenizer, hparams = load_simplifier("liamcripwell/pgdyn-simp")
 
 An example use-case of inference on out-of-domain test data is illustrated in [this script](examples/wikiauto_inference.sh).
 
+## Data
+The Wiki-Auto data used to train the relevant planners and simplification models can be downloaded [here](https://drive.google.com/file/d/1lU8htUIVBuuU24HrPErpV01hlA6tc-d1/view?usp=sharing). Please contact the authors for more information regarding the Newsela data once you have obtain a licence.
+
 ## Preparing context representations
 We provide a script to generate sentence-level context encodings which are used within `pgdyn-plan` and `conbart`.
 
