@@ -2,7 +2,7 @@
 
 This repo contains code and resources for the following papers:
 * EACL 2023 paper, [_Document-Level Planning for Text Simplification_](https://aclanthology.org/2023.eacl-main.70/).
-* ACL 2023 Findings paper, [_Context-Aware Document Simplification_](https://arxiv.org/abs/2305.06274).
+* ACL 2023 Findings paper, [_Context-Aware Document Simplification_](https://aclanthology.org/2023.findings-acl.834/).
 
 We will progressively update with code, instructions, pretrained models, data, etc. as soon as we can make them available.
 
@@ -195,14 +195,20 @@ If you find this repository useful, please cite our publications:
 }
 ```
 
-* [Context-Aware Document Simplification](https://arxiv.org/abs/2305.06274)
+* [Context-Aware Document Simplification](https://aclanthology.org/2023.findings-acl.834/)
 ```bibtex
-@misc{cripwell2023contextaware,
-      title={Context-Aware Document Simplification}, 
-      author={Liam Cripwell and Joël Legrand and Claire Gardent},
-      year={2023},
-      eprint={2305.06274},
-      archivePrefix={arXiv},
-      primaryClass={cs.CL}
+@inproceedings{cripwell-etal-2023-context,
+    title = "Context-Aware Document Simplification",
+    author = {Cripwell, Liam  and
+      Legrand, Jo{\"e}l  and
+      Gardent, Claire},
+    booktitle = "Findings of the Association for Computational Linguistics: ACL 2023",
+    month = jul,
+    year = "2023",
+    address = "Toronto, Canada",
+    publisher = "Association for Computational Linguistics",
+    url = "https://aclanthology.org/2023.findings-acl.834",
+    doi = "10.18653/v1/2023.findings-acl.834",
+    pages = "13190--13206",
 }
 ```
